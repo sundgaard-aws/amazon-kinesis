@@ -1,3 +1,4 @@
+from asyncio.windows_events import NULL
 import boto3
 import json
 import datetime
@@ -23,11 +24,19 @@ shardDict=streamDict['StreamDescription']['Shards']
 print(shardDict)
 for shard in shardDict:
     shardId = shard['ShardId']
-    print("shardId=["+shardId+"]")
-
-shardIterator = kinesis.get_shard_iterator(StreamName=streamName,ShardId=shardId,ShardIteratorType='LATEST')
-records = kinesis.get_records(ShardIterator=shardIterator['ShardIterator'],Limit=10)
-print(records)
+    print("shardId=["+shardId+"]")    
+    shardIterator = kinesis.get_shard_iterator(StreamName=streamName,ShardId=shardId,ShardIteratorType='TRIM_HORIZON')['ShardIterator'] # or trim_horizon, LATEST
+    print("shardIterator=["+str(shardIterator)+"]")
+    while shardIterator!=NULL:
+        recordsDict = kinesis.get_records(ShardIterator=shardIterator,Limit=1000)
+        print(recordsDict)
+        recordsDict["Records"]
+        shardIterator=recordsDict["NextShardIterator"]
+        print("shardIterator=["+str(shardIterator)+"]")
+        #shardIterator=NULL
+    
+    #records = kinesis.get_records(ShardIterator=shardIterator['ShardIterator'],Limit=10)
+    #print(records)
 
 endTime=datetime.datetime.now()
 duration=(endTime-startTime).microseconds/1000
