@@ -11,7 +11,7 @@ print("started data consumption for stream ["+streamName+"] at ["+str(startTime)
 kinesis = boto3.client("kinesis", region_name="eu-central-1")
 
 i=0
-rowsToGet=1
+getLimit=1000
 #random.seed()
 #while i<rowsToGet:
 #    kinesis.get_record(StreamName=streamName)
@@ -21,19 +21,28 @@ streamDict = kinesis.describe_stream(StreamName=streamName)
 #stream=json.loads(str(streamJSON))
 #print(stream)
 shardDict=streamDict['StreamDescription']['Shards']
+totalNumberOfRecordsFound=0
 print(shardDict)
 for shard in shardDict:
     shardId = shard['ShardId']
-    print("shardId=["+shardId+"]")    
-    shardIterator = kinesis.get_shard_iterator(StreamName=streamName,ShardId=shardId,ShardIteratorType='TRIM_HORIZON')['ShardIterator'] # or trim_horizon, LATEST
-    print("shardIterator=["+str(shardIterator)+"]")
-    while shardIterator!=NULL:
-        recordsDict = kinesis.get_records(ShardIterator=shardIterator,Limit=1000)
-        print(recordsDict)
-        recordsDict["Records"]
-        shardIterator=recordsDict["NextShardIterator"]
-        print("shardIterator=["+str(shardIterator)+"]")
-        #shardIterator=NULL
+    #print("shardId=["+shardId+"]")    
+    shardBucketIterator = kinesis.get_shard_iterator(StreamName=streamName,ShardId=shardId,ShardIteratorType='TRIM_HORIZON')['ShardIterator'] # or trim_horizon, LATEST
+    #print("shardIterator=["+str(shardBucketIterator)+"]")
+    upToDate=False
+    while shardBucketIterator!=NULL and upToDate==False:
+        getRecordsResponseDict = kinesis.get_records(ShardIterator=shardBucketIterator,Limit=getLimit)        
+        records=getRecordsResponseDict["Records"]
+        if(len(records)>0):
+            print("Found records in current shard bucket:")
+            print("Number of records found ["+str(len(records))+"]")
+            totalNumberOfRecordsFound+=len(records)
+        #if(records!=NULL and records.count>0): print(getRecordsResponseDict)
+        millisBehindLatest=getRecordsResponseDict["MillisBehindLatest"]
+        if(millisBehindLatest==0): 
+            upToDate=True
+            print("All caught up, exiting loop...")
+        else: shardBucketIterator=getRecordsResponseDict["NextShardIterator"]
+        #print("shardIterator=["+str(shardBucketIterator)+"]")        
     
     #records = kinesis.get_records(ShardIterator=shardIterator['ShardIterator'],Limit=10)
     #print(records)
@@ -41,5 +50,5 @@ for shard in shardDict:
 endTime=datetime.datetime.now()
 duration=(endTime-startTime).microseconds/1000
 print("duration=["+str(round(duration))+"] ms")
-print("avg message get duration=["+str(round(duration/rowsToGet))+"] ms")
-print("data generation ended at ["+str(endTime)+"].")
+print("avg message get duration=["+str(round(duration/totalNumberOfRecordsFound))+"] ms")
+print("data consumption ended at ["+str(endTime)+"].")
